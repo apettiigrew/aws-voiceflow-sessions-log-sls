@@ -1,0 +1,51 @@
+# "service" is the name of this project. This will also be added to your AWS resource names.
+service: vf-endchat
+
+provider:
+  name: aws
+  runtime: nodejs20.x
+  stage: ${opt:stage, 'dev'}
+  region: ${opt:region, 'us-east-1'}
+  apiKeys:
+    - name: ${self:service}-api-key-${sls:stage}
+      value: ${env:API_KEY, 'set-me-in-env-or-opt'}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt ChatEventsQueue.Arn
+        - Effect: Allow
+          Action:
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+          Resource: !GetAtt ChatSessionsTable.Arn
+
+functions:
+  submitChatEvent:
+    name: ${self:service}-submit-chat-event-${sls:stage}
+    description: Receives chat events via HTTP POST /chat and enqueues them to SQS for processing.
+    reservedConcurrency: 3
+    handler: src/functions/submit-chat-event.handler
+    events:
+      - http:
+          path: /chat
+          method: post
+          private: true
+    environment:
+      CHAT_EVENTS_QUEUE_URL: !Ref ChatEventsQueue
+
+  processChatEvent:
+    name: ${self:service}-process-chat-event-${sls:stage}
+    description: Consumes chat events from SQS and updates chat session state in DynamoDB (auto-end logic).
+    reservedConcurrency: 10
+    handler: src/functions/process-chat-event.handler
+    events:
+      - sqs:
+          arn: !GetAtt ChatEventsQueue.Arn
+          batchSize: 10
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+
+resources:
+  Resources: ${file(resources.yml):Resources}

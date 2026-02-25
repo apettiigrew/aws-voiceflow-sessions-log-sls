@@ -1,0 +1,195 @@
+---
+alwaysApply: true
+---
+
+# Node.js + TypeScript Project Standards
+
+## Purpose
+Enforce consistent file, folder, and naming conventions across the backend codebase.
+
+This project follows a feature-first modular architecture using strict naming conventions.
+
+---
+
+# 1. Folder Structure Standard
+
+## Required Structure
+
+All domain logic must be organized by feature/module:
+
+src/
+  modules/
+    <feature-name>/
+      <feature>-controller.ts
+      <feature>-service.ts
+      <feature>-repository.ts
+      <feature>.types.ts
+      <feature>.interface.ts
+      create-<feature>.dto.ts
+      update-<feature>.dto.ts
+      <feature>-validator.ts
+
+Do NOT use layer-first global folders like:
+- controllers/
+- services/
+- repositories/
+
+Feature-based modular structure is mandatory.
+
+---
+
+# 2. Folder Naming Rules
+
+- Must use kebab-case
+- Must be lowercase
+- No underscores
+- No PascalCase
+
+✅ user-profile
+❌ UserProfile
+❌ user_profile
+
+---
+
+# 3. File Naming Rules
+
+All files must:
+
+- Use kebab-case
+- Be lowercase
+- Include role suffix when applicable
+- Be descriptive and explicit
+
+Examples:
+
+user-controller.ts
+auth-service.ts
+order-repository.ts
+jwt-middleware.ts
+create-user.dto.ts
+user.types.ts
+user.interface.ts
+user-service.spec.ts
+
+Forbidden patterns:
+
+UserController.ts
+userController.ts
+user_controller.ts
+
+---
+
+# 4. Role-Based Suffix Enforcement
+
+The following suffixes must be used:
+
+Controllers:
+- <feature>-controller.ts
+
+Services:
+- <feature>-service.ts
+
+Repositories:
+- <feature>-repository.ts
+
+Middleware:
+- <name>-middleware.ts
+
+DTOs:
+- create-<feature>.dto.ts
+- update-<feature>.dto.ts
+
+Types:
+- <feature>.types.ts
+
+Interfaces:
+- <feature>.interface.ts
+
+Validators:
+- <feature>-validator.ts
+
+Tests:
+- <file-name>.spec.ts
+OR
+- <file-name>.test.ts
+
+Choose one convention and keep it consistent.
+
+---
+
+# 5. TypeScript Naming Conventions
+
+Classes:
+- PascalCase
+- Must match exported class name
+
+Example:
+
+// user-service.ts
+export class UserService {}
+
+Interfaces:
+- PascalCase
+- No "I" prefix
+
+✅ UserRepository
+❌ IUserRepository
+
+Functions:
+- camelCase
+
+Variables:
+- camelCase
+
+Constants:
+- UPPER_SNAKE_CASE only for true constants
+
+---
+
+# 6. Import Rules
+
+Use absolute imports via path alias:
+
+@/* → src/*
+
+Example:
+
+import { UserService } from '@/modules/user/user-service'
+
+Avoid relative deep imports:
+
+❌ ../../../modules/user/user-service
+
+---
+
+# 7. Barrel File Usage
+
+Barrel files (index.ts) are allowed only inside feature modules.
+
+Do NOT create global barrel exports across the entire project.
+
+---
+
+# 8. Strict Enforcement
+
+When generating or modifying code:
+
+- Always follow kebab-case for files and folders.
+- Always apply correct suffix based on file responsibility.
+- Always place code inside a feature module.
+- Never introduce layer-first structure.
+- Never introduce inconsistent naming.
+
+If existing code violates these standards, refactor to comply.
+
+---
+
+# Summary
+
+Architecture Style: Feature-first modular
+File Naming: kebab-case
+Class Naming: PascalCase
+Function Naming: camelCase
+Suffix Pattern: Role-based explicit naming
+
+Consistency is mandatory.

@@ -1,0 +1,28 @@
+# CloudFormation resources: SQS queues (main + DLQ) and DynamoDB table.
+# Referenced from serverless.yml via: resources: Resources: ${file(resource.yml):Resources}
+
+Resources:
+  ChatEventsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-chat-events-dlq-${sls:stage}
+
+  ChatEventsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-chat-events-${sls:stage}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ChatEventsDLQ.Arn
+        maxReceiveCount: 5
+
+  ChatSessionsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: ${self:service}-chat-sessions-${sls:stage}
+      AttributeDefinitions:
+        - AttributeName: id
+          AttributeType: S
+      KeySchema:
+        - AttributeName: id
+          KeyType: HASH
+      BillingMode: PAY_PER_REQUEST
