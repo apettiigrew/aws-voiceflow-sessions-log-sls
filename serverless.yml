@@ -4,11 +4,19 @@ service: vf-endchat
 provider:
   name: aws
   runtime: nodejs20.x
+  architecture: arm64
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-  apiKeys:
-    - name: ${self:service}-api-key-${sls:stage}
-      value: ${env:API_KEY, 'set-me-in-env-or-opt'}
+  package:
+    individually: true
+  apiGateway:
+    apiKeys:
+      - name: ${self:service}-api-key-${sls:stage}
+        value: ${env:API_KEY}
+    usagePlan:
+      throttle:
+        burstLimit: 200
+        rateLimit: 100
   iam:
     role:
       statements:
@@ -46,6 +54,13 @@ functions:
           batchSize: 10
     environment:
       CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+
+build:
+  esbuild:
+    bundle: true
+    minify: true
+    target: node20
+    sourcemap: false
 
 resources:
   Resources: ${file(resources.yml):Resources}

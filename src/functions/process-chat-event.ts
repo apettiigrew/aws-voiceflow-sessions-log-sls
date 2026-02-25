@@ -10,6 +10,7 @@ interface SQSRecord {
 interface ChatEventMessage {
   userId?: string;
   sessionId?: string;
+  timestamp?: number;
 }
 
 export const handler = async (event: { Records?: SQSRecord[] }): Promise<void> => {

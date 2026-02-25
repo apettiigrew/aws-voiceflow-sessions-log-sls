@@ -1,0 +1,158 @@
+openapi: 3.0.3
+
+info:
+  title: Voiceflow Auto End Chat API
+  description: >
+    Receives Voiceflow chat events and schedules automatic session termination.
+    All endpoints require an API key passed in the `x-api-key` header.
+  version: 1.0.0
+
+servers:
+  - url: https://{apiId}.execute-api.{region}.amazonaws.com/{stage}
+    description: AWS API Gateway (REST)
+    variables:
+      apiId:
+        default: your-api-id
+        description: API Gateway REST API ID (found in AWS Console after deploy)
+      region:
+        default: us-east-1
+        description: AWS region the service is deployed to
+      stage:
+        default: dev
+        description: Deployment stage
+
+security:
+  - ApiKeyAuth: []
+
+paths:
+  /chat:
+    post:
+      summary: Submit a chat event
+      description: >
+        Accepts a chat event containing a user ID, session ID, and timestamp,
+        then enqueues it for async processing to schedule automatic chat termination.
+      operationId: submitChatEvent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ChatEventBody"
+            examples:
+              valid:
+                summary: Valid request
+                value:
+                  userId: "user-123"
+                  sessionId: "session-456"
+                  timestamp: 1730000000000
+      responses:
+        "202":
+          description: Event accepted and enqueued successfully.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AcceptedResponse"
+              examples:
+                accepted:
+                  summary: Event accepted
+                  value:
+                    messageId: "abc123-sqs-message-id"
+        "400":
+          description: Invalid request body or failed validation.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                missingUserId:
+                  summary: Missing userId
+                  value:
+                    error: "userId is required and must be a non-empty string"
+                missingSessionId:
+                  summary: Missing sessionId
+                  value:
+                    error: "sessionId is required and must be a non-empty string"
+                missingTimestamp:
+                  summary: Missing or invalid timestamp
+                  value:
+                    error: "timestamp is required and must be a number (Unix milliseconds)"
+                invalidJson:
+                  summary: Malformed JSON body
+                  value:
+                    error: "Invalid JSON body"
+        "403":
+          description: Missing or invalid API key.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                forbidden:
+                  summary: Forbidden
+                  value:
+                    message: "Forbidden"
+        "500":
+          description: Internal server error.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+              examples:
+                serverError:
+                  summary: Server error
+                  value:
+                    error: "Failed to enqueue event"
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: >
+        API key provisioned by AWS API Gateway. Pass it in the `x-api-key` header
+        on every request. The key is created during `serverless deploy` and its
+        value is sourced from the `API_KEY` environment variable.
+
+  schemas:
+    ChatEventBody:
+      type: object
+      required:
+        - userId
+        - sessionId
+        - timestamp
+      properties:
+        userId:
+          type: string
+          minLength: 1
+          description: Unique identifier of the Voiceflow user.
+          example: "user-123"
+        sessionId:
+          type: string
+          minLength: 1
+          description: Unique identifier of the Voiceflow chat session.
+          example: "session-456"
+        timestamp:
+          type: number
+          description: Unix timestamp in milliseconds when the chat event occurred.
+          example: 1730000000000
+
+    AcceptedResponse:
+      type: object
+      required:
+        - messageId
+      properties:
+        messageId:
+          type: string
+          description: SQS message ID assigned to the enqueued event.
+          example: "abc123-sqs-message-id"
+
+    ErrorResponse:
+      type: object
+      required:
+        - error
+      properties:
+        error:
+          type: string
+          description: Human-readable description of the error.
+          example: "userId is required and must be a non-empty string"
