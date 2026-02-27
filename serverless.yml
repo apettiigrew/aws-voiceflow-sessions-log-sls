@@ -15,6 +15,15 @@ provider:
       throttle:
         burstLimit: 200
         rateLimit: 100
+  logs:
+    restApi:
+      accessLogging: true
+      format: >-
+        {"requestId":"$context.requestId","extendedRequestId":"$context.extendedRequestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}
+      executionLogging: true
+      level: INFO
+      fullExecutionData: false
+      roleManagedExternally: true
   environment:
     AWS_HTTP_API_KEY: ${env:AWS_HTTP_API_KEY}
     VOICEFLOW_API_KEY: ${env:VOICEFLOW_API_KEY}
