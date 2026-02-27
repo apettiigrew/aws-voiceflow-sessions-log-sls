@@ -51,7 +51,7 @@ export const handler = async (event: { Records?: SQSRecord[] }): Promise<void> =
   for (const record of records) {
     console.log(record);
     
-    const { data, time } = parseMessage(record.body);
+    const { data } = parseMessage(record.body);
     const id = crypto.randomUUID();
     const scheduledEndAt = data.startTime + 10 * 60 * 1000;
     const now = nowJamaicaMs();
