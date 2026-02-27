@@ -23,6 +23,7 @@ export async function voiceFlowApi<T>(method: string, path: string): Promise<Api
       method,
       headers: {
         Authorization: config.voiceflowApiKey,
+        versionID: config.voiceflowVersionId,
       },
     });
 

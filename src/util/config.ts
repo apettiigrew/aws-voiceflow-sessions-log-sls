@@ -10,6 +10,11 @@ function getEnvValueOrThrowError(key: string): string {
   }
   return value;
 }
+function getEnvValueOrReturnUndefined(key: string): string | undefined {
+  const value = process.env[key];
+  return value;
+}
+
 
 export const config = {
   /** AWS API Gateway API key. */
@@ -18,6 +23,8 @@ export const config = {
   voiceflowApiKey: getEnvValueOrThrowError("VOICEFLOW_API_KEY"),
   /** Voiceflow base URL for dialog management API. */
   voiceflowBaseUrl: getEnvValueOrThrowError("VOICEFLOW_BASEURL"),
+  /** Voicelfow version that is currently being used */
+  voiceflowVersionId: getEnvValueOrReturnUndefined("VOICEFLOW_VERSIONID") || "development",
   /** SQS queue URL for chat events (used by submitChatEvent). */
   chatEventsQueueUrl: getEnvValueOrThrowError("CHAT_EVENTS_QUEUE_URL"),
   /** DynamoDB table name for chat sessions. */

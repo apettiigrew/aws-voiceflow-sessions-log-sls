@@ -9,23 +9,20 @@ const dynamo = new DynamoDBClient({});
 export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
   const batchItemFailures: SQSBatchResponse["batchItemFailures"] = [];
 
-  // call voiceflow api ensure success
-  // success | fail
-  // call dynamodb api ensure success
-  // success | fail
-
-
   for (const record of event.Records) {
     try {
       let payload: SessionRecord;
       payload = JSON.parse(record.body) as SessionRecord;
       
+      // Send voiceflow API request to restart the use converation
       const result = await voiceFlowApi("DELETE", `/state/user/${encodeURIComponent(payload.userId)}`);
 
       if (result.error) {
         throw new Error(`Voiceflow request failed for user "${payload.userId}": ${result.error.message}`);
       }
 
+
+      // Update dynamo table to signal that the request has been sent for this userid
       await dynamo.send(
         new UpdateItemCommand({
           TableName: config.chatSessionsTable,
