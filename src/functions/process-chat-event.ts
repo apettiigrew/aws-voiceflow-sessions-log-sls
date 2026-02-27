@@ -7,9 +7,17 @@ import { Status } from "../models/data";
 const dynamo = new DynamoDBClient({});
 
 const chatEventMessageSchema = z.object({
-  userId: z.string().min(1, "userId is required and must be a non-empty string"),
-  sessionId: z.string().min(1, "sessionId is required and must be a non-empty string"),
-  timestamp: z.number({ message: "timestamp is required and must be a number (Unix milliseconds)" }),
+  data: z.object({
+    endTime: z.number({ message: "data.endTime is required and must be a number (Unix milliseconds)" }),
+    environmentID: z.string().min(1, "data.environmentID is required and must be a non-empty string"),
+    projectID: z.string().min(1, "data.projectID is required and must be a non-empty string"),
+    sessionID: z.string().min(1, "data.sessionID is required and must be a non-empty string"),
+    startTime: z.number({ message: "data.startTime is required and must be a number (Unix milliseconds)" }),
+    userID: z.string().min(1, "data.userID is required and must be a non-empty string"),
+  }),
+  resource: z.string().min(1, "resource is required and must be a non-empty string"),
+  time: z.number({ message: "time is required and must be a number (Unix milliseconds)" }),
+  type: z.literal("runtime.session.end"),
 });
 
 type ChatEventMessage = z.infer<typeof chatEventMessageSchema>;
@@ -43,17 +51,17 @@ export const handler = async (event: { Records?: SQSRecord[] }): Promise<void> =
   for (const record of records) {
     console.log(record);
     
-    const { userId, sessionId,timestamp} = parseMessage(record.body);
+    const { data, time } = parseMessage(record.body);
     const id = crypto.randomUUID();
-    const scheduledEndAt = timestamp + 10 * 60 * 1000;
+    const scheduledEndAt = data.startTime + 10 * 60 * 1000;
     const now = nowJamaicaMs();
     await dynamo.send(
       new PutItemCommand({
         TableName: tableName,
         Item: {
           id: { S: id },
-          userId: { S: userId.trim() },
-          sessionId: { S: sessionId.trim() },
+          userId: { S: data.userID.trim() },
+          sessionId: { S: data.sessionID.trim() },
           status: { S: Status.ACTIVE },
           scheduledEndAt: { N: String(scheduledEndAt) },
           voiceflowRequestSent: { BOOL: false },

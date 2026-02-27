@@ -7,16 +7,19 @@ provider:
   architecture: arm64
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-  package:
-    individually: true
   apiGateway:
     apiKeys:
       - name: ${self:service}-api-key-${sls:stage}
-        value: ${env:API_KEY}
+        value: ${env:AWS_HTTP_API_KEY}
     usagePlan:
       throttle:
         burstLimit: 200
         rateLimit: 100
+  environment:
+    AWS_HTTP_API_KEY: ${env:AWS_HTTP_API_KEY}
+    VOICEFLOW_API_KEY: ${env:VOICEFLOW_API_KEY}
+    VOICEFLOW_BASEURL: ${env:VOICEFLOW_BASEURL}
+    VOICEFLOW_VERSIONID: ${env:VOICEFLOW_VERSIONID, 'development'}
   iam:
     role:
       statements:
@@ -101,7 +104,7 @@ functions:
           batchSize: 10
           functionResponseType: ReportBatchItemFailures
     environment:
-      EXTERNAL_SERVICE_URL: ${env:EXTERNAL_SERVICE_URL, ''}
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
 
 build:
   esbuild:
@@ -109,6 +112,8 @@ build:
     minify: true
     target: node20
     sourcemap: false
+package:
+  individually: true
 
 resources:
   Resources: ${file(resources.yml):Resources}
