@@ -22,6 +22,8 @@ export const config = {
   notifyQueueUrl: getEnvValueOrThrowError("NOTIFY_QUEUE_URL"),
   /** External notification service URL (used by notifyExternalService). */
   externalServiceUrl: getEnvValueOrThrowError("EXTERNAL_SERVICE_URL"),
+  /** Voiceflow API key for state management API calls. */
+  voiceflowApiKey: getEnvValueOrThrowError("VOICEFLOW_API_KEY"),
 } as const;
 
 export type Config = typeof config;
