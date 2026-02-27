@@ -28,17 +28,7 @@ function parseBody(raw: string | null): unknown {
 }
 
 function ensureQueueUrl(): Result<{ queueUrl: string }> {
-  const queueUrl = config.chatEventsQueueUrl;
-  if (!queueUrl) {
-    return {
-      ok: false,
-      response: {
-        statusCode: 500,
-        body: JSON.stringify({ error: "CHAT_EVENTS_QUEUE_URL not configured" }),
-      },
-    };
-  }
-  return { ok: true, queueUrl };
+  return { ok: true, queueUrl: config.chatEventsQueueUrl };
 }
 
 function parseAndValidateBody(rawBody: string | null): Result<{ body: ChatEventBody }> {
@@ -77,7 +67,7 @@ async function enqueueChatEvent(
         MessageBody: JSON.stringify({
           userId: userId.trim(),
           sessionId: sessionId.trim(),
-          timestamp,
+          timestamp: timestamp,
         }),
       })
     );

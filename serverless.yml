@@ -24,10 +24,21 @@ provider:
           Action: sqs:SendMessage
           Resource: !GetAtt ChatEventsQueue.Arn
         - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt ExpiredSessionsQueue.Arn
+        - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt NotifyQueue.Arn
+        - Effect: Allow
           Action:
             - dynamodb:PutItem
             - dynamodb:UpdateItem
           Resource: !GetAtt ChatSessionsTable.Arn
+        - Effect: Allow
+          Action: dynamodb:Query
+          Resource:
+            - !GetAtt ChatSessionsTable.Arn
+            - !Sub "${ChatSessionsTable.Arn}/index/StatusScheduledEndAtIndex"
 
 functions:
   submitChatEvent:
@@ -54,6 +65,43 @@ functions:
           batchSize: 10
     environment:
       CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+
+  determineSession:
+    name: ${self:service}-determine-session-${sls:stage}
+    description: Runs every 2 minutes; queries DynamoDB for expired sessions and sends them to ExpiredSessionsQueue.
+    handler: src/functions/determine-session.handler
+    reservedConcurrency: 1
+    events:
+      - schedule:
+          rate: rate(2 minutes)
+          enabled: true
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+      EXPIRED_SESSIONS_QUEUE_URL: !Ref ExpiredSessionsQueue
+
+  markSessionsInactive:
+    name: ${self:service}-mark-sessions-inactive-${sls:stage}
+    description: Consumes expired session records from SQS and marks them inactive in DynamoDB; forwards to NotifyQueue.
+    handler: src/functions/mark-sessions-inactive.handler
+    events:
+      - sqs:
+          arn: !GetAtt ExpiredSessionsQueue.Arn
+          batchSize: 10
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+      NOTIFY_QUEUE_URL: !Ref NotifyQueue
+
+  notifyExternalService:
+    name: ${self:service}-notify-external-service-${sls:stage}
+    description: Consumes from NotifyQueue and calls external notification API.
+    handler: src/functions/notify-external-service.handler
+    events:
+      - sqs:
+          arn: !GetAtt NotifyQueue.Arn
+          batchSize: 10
+          functionResponseType: ReportBatchItemFailures
+    environment:
+      EXTERNAL_SERVICE_URL: ${env:EXTERNAL_SERVICE_URL, ''}
 
 build:
   esbuild:

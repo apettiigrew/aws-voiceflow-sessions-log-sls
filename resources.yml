@@ -15,6 +15,32 @@ Resources:
         deadLetterTargetArn: !GetAtt ChatEventsDLQ.Arn
         maxReceiveCount: 5
 
+  ExpiredSessionsDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-expired-sessions-dlq-${sls:stage}
+
+  ExpiredSessionsQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-expired-sessions-${sls:stage}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt ExpiredSessionsDLQ.Arn
+        maxReceiveCount: 5
+
+  NotifyDLQ:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-notify-dlq-${sls:stage}
+
+  NotifyQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: ${self:service}-notify-${sls:stage}
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt NotifyDLQ.Arn
+        maxReceiveCount: 5
+
   ChatSessionsTable:
     Type: AWS::DynamoDB::Table
     Properties:
@@ -22,7 +48,20 @@ Resources:
       AttributeDefinitions:
         - AttributeName: id
           AttributeType: S
+        - AttributeName: status
+          AttributeType: S
+        - AttributeName: scheduledEndAt
+          AttributeType: N
       KeySchema:
         - AttributeName: id
           KeyType: HASH
+      GlobalSecondaryIndexes:
+        - IndexName: StatusScheduledEndAtIndex
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: scheduledEndAt
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
       BillingMode: PAY_PER_REQUEST
