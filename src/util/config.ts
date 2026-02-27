@@ -12,18 +12,20 @@ function getEnvValueOrThrowError(key: string): string {
 }
 
 export const config = {
+  /** AWS API Gateway API key. */
+  awsHttpApiKey: getEnvValueOrThrowError("AWS_HTTP_API_KEY"),
+  /** Voiceflow API key for state management API calls. */
+  voiceflowApiKey: getEnvValueOrThrowError("VOICEFLOW_API_KEY"),
+  /** Voiceflow base URL for dialog management API. */
+  voiceflowBaseUrl: getEnvValueOrThrowError("VOICEFLOW_BASEURL"),
   /** SQS queue URL for chat events (used by submitChatEvent). */
   chatEventsQueueUrl: getEnvValueOrThrowError("CHAT_EVENTS_QUEUE_URL"),
-  /** DynamoDB table name for chat sessions (used by processChatEvent). */
+  /** DynamoDB table name for chat sessions. */
   chatSessionsTable: getEnvValueOrThrowError("CHAT_SESSIONS_TABLE"),
   /** SQS queue URL for expired sessions (used by determineSession). */
   expiredSessionsQueueUrl: getEnvValueOrThrowError("EXPIRED_SESSIONS_QUEUE_URL"),
   /** SQS queue URL for notify worker (used by markSessionsInactive). */
   notifyQueueUrl: getEnvValueOrThrowError("NOTIFY_QUEUE_URL"),
-  /** External notification service URL (used by notifyExternalService). */
-  externalServiceUrl: getEnvValueOrThrowError("EXTERNAL_SERVICE_URL"),
-  /** Voiceflow API key for state management API calls. */
-  voiceflowApiKey: getEnvValueOrThrowError("VOICEFLOW_API_KEY"),
 } as const;
 
 export type Config = typeof config;

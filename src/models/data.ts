@@ -11,5 +11,6 @@ export type SessionRecord = {
     createdAt: number;
     updatedAt: number;       
     // Unix timestamp in milliseconds
-    scheduledEndAt: number;   
+    scheduledEndAt: number;
+    voiceflowRequestSent: boolean;
   };
