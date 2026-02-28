@@ -8,7 +8,7 @@ const sqs = new SQSClient({});
 /** Request body schema; validated in handler via safeParse(parsed). */
 const chatEventBodySchema = z.object({
   userId: z.string().min(1, "userId is required and must be a non-empty string"),
-  sessionId: z.string().min(1, "sessionId is required and must be a non-empty string"),
+  // sessionId: z.string().min(1, "sessionId is required and must be a non-empty string"),
   timestamp: z.number({ message: "timestamp is required and must be a number (Unix milliseconds)" }),
 });
 
@@ -59,14 +59,14 @@ async function enqueueChatEvent(
   queueUrl: string,
   body: ChatEventBody
 ): Promise<APIGatewayProxyResult> {
-  const { userId, sessionId, timestamp } = body;
+  const { userId, timestamp } = body;
   try {
     const sendResult = await sqs.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
           userId: userId.trim(),
-          sessionId: sessionId.trim(),
+          // sessionId: sessionId.trim(),
           timestamp: timestamp,
         }),
       })

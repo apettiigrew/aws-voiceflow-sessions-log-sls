@@ -18,21 +18,21 @@ function getEnvValueOrReturnUndefined(key: string): string | undefined {
 
 export const config = {
   /** AWS API Gateway API key. */
-  awsHttpApiKey: getEnvValueOrThrowError("AWS_HTTP_API_KEY"),
+  get awsHttpApiKey() { return getEnvValueOrThrowError("AWS_HTTP_API_KEY"); },
   /** Voiceflow API key for state management API calls. */
-  voiceflowApiKey: getEnvValueOrThrowError("VOICEFLOW_API_KEY"),
+  get voiceflowApiKey() { return getEnvValueOrThrowError("VOICEFLOW_API_KEY"); },
   /** Voiceflow base URL for dialog management API. */
-  voiceflowBaseUrl: getEnvValueOrThrowError("VOICEFLOW_BASEURL"),
+  get voiceflowBaseUrl() { return getEnvValueOrThrowError("VOICEFLOW_BASEURL"); },
   /** Voicelfow version that is currently being used */
-  voiceflowVersionId: getEnvValueOrReturnUndefined("VOICEFLOW_VERSIONID") || "development",
+  get voiceflowVersionId() { return getEnvValueOrReturnUndefined("VOICEFLOW_VERSIONID") || "development"; },
   /** SQS queue URL for chat events (used by submitChatEvent). */
-  chatEventsQueueUrl: getEnvValueOrThrowError("CHAT_EVENTS_QUEUE_URL"),
+  get chatEventsQueueUrl() { return getEnvValueOrThrowError("CHAT_EVENTS_QUEUE_URL"); },
   /** DynamoDB table name for chat sessions. */
-  chatSessionsTable: getEnvValueOrThrowError("CHAT_SESSIONS_TABLE"),
+  get chatSessionsTable() { return getEnvValueOrThrowError("CHAT_SESSIONS_TABLE"); },
   /** SQS queue URL for expired sessions (used by determineSession). */
-  expiredSessionsQueueUrl: getEnvValueOrThrowError("EXPIRED_SESSIONS_QUEUE_URL"),
+  get expiredSessionsQueueUrl() { return getEnvValueOrThrowError("EXPIRED_SESSIONS_QUEUE_URL"); },
   /** SQS queue URL for notify worker (used by markSessionsInactive). */
-  notifyQueueUrl: getEnvValueOrThrowError("NOTIFY_QUEUE_URL"),
-} as const;
+  get notifyQueueUrl() { return getEnvValueOrThrowError("NOTIFY_QUEUE_URL"); },
+};
 
 export type Config = typeof config;
