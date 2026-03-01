@@ -2,7 +2,7 @@ import { DynamoDBClient, UpdateItemCommand } from "@aws-sdk/client-dynamodb";
 import type { SQSBatchResponse, SQSEvent } from "aws-lambda";
 import { SessionRecord } from "../models/data";
 import { config } from "../util/config";
-import { voiceFlowApi } from "../modules/voiceflow/voiceflow-service";
+import { voiceFlowDeleteApi, voiceFlowInteractApi } from "../modules/voiceflow/voiceflow-service";
 
 const dynamo = new DynamoDBClient({});
 
@@ -13,20 +13,21 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
     try {
       let payload: SessionRecord;
       payload = JSON.parse(record.body) as SessionRecord;
-      
-      // Send voiceflow API request to restart the use converation
-      const result = await voiceFlowApi("DELETE", `/state/user/${encodeURIComponent(payload.userId)}`);
+    
+      // Send voiceflow API request to restart the user conversation
+      const result = await voiceFlowInteractApi(payload.userId);
 
       if (result != undefined && result.error) {
-        throw new Error(`Voiceflow request failed for user "${payload.userId}": ${result.error.message}`);
+        throw new Error(`Voiceflow interact request failed for user "${payload.userId}": ${result.error.message}`);
       }
 
-
+      console.log(result);
+      
       // Update dynamo table to signal that the request has been sent for this userid
       await dynamo.send(
         new UpdateItemCommand({
           TableName: config.chatSessionsTable,
-          Key: { id: { S: payload.id } },
+          Key: { userId: { S: payload.userId } },
           UpdateExpression: "SET voiceflowRequestSent = :sent",
           ExpressionAttributeValues: {
             ":sent": { BOOL: true },

@@ -1,5 +1,6 @@
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: vf-endchat
+useDotenv: true
 
 provider:
   name: aws
@@ -114,7 +115,7 @@ functions:
           functionResponseType: ReportBatchItemFailures
     environment:
       CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
-
+      
 build:
   esbuild:
     bundle: true

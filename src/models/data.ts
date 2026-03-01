@@ -6,11 +6,9 @@ export enum Status {
 export type SessionRecord = {
     id: string;
     userId: string;
-    sessionId: string;
     status: Status;
     createdAt: number;
-    updatedAt: number;       
-    // Unix timestamp in milliseconds
+    updatedAt: number;
     scheduledEndAt: number;
     voiceflowRequestSent: boolean;
-  };
+};
