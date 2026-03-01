@@ -41,7 +41,7 @@ export const handler = async (event: SQSEvent, context: Context): Promise<void> 
     await dynamo.send(
       new UpdateItemCommand({
         TableName: tableName,
-        Key: { id: { S: payload.id } },
+        Key: { userId: { S: payload.userId } },
         UpdateExpression: "SET #s = :inactive, updatedAt = :now",
         ExpressionAttributeNames: { "#s": "status" },
         ExpressionAttributeValues: {

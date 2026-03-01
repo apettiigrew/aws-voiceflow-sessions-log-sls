@@ -1,40 +1,25 @@
-import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
 import { z } from "zod";
 import { config } from "../util/config";
-import { nowJamaicaMs } from "../util/date";
+import { ChatEvent, chatEventBodySchema, nowJamaicaMs } from "../util/date";
 import { Status } from "../models/data";
+import { DateTime } from "luxon";
 
 const dynamo = new DynamoDBClient({});
-
-const chatEventMessageSchema = z.object({
-  data: z.object({
-    endTime: z.number({ message: "data.endTime is required and must be a number (Unix milliseconds)" }),
-    environmentID: z.string().min(1, "data.environmentID is required and must be a non-empty string"),
-    projectID: z.string().min(1, "data.projectID is required and must be a non-empty string"),
-    sessionID: z.string().min(1, "data.sessionID is required and must be a non-empty string"),
-    startTime: z.number({ message: "data.startTime is required and must be a number (Unix milliseconds)" }),
-    userID: z.string().min(1, "data.userID is required and must be a non-empty string"),
-  }),
-  resource: z.string().min(1, "resource is required and must be a non-empty string"),
-  time: z.number({ message: "time is required and must be a number (Unix milliseconds)" }),
-  type: z.literal("runtime.session.end"),
-});
-
-type ChatEventMessage = z.infer<typeof chatEventMessageSchema>;
 
 interface SQSRecord {
   body?: string;
 }
 
-function parseMessage(raw: string | undefined): ChatEventMessage {
-  let parsed: unknown;
+function parseMessage(raw: string | undefined): ChatEvent {
+  let parsed;
   try {
     parsed = raw ? JSON.parse(raw) : {};
   } catch {
     throw new Error(`Invalid message body: ${raw}`);
   }
 
-  const result = chatEventMessageSchema.safeParse(parsed);
+  const result = chatEventBodySchema.safeParse(parsed);
   if (!result.success) {
     throw new Error(result.error.issues[0]?.message ?? "Message validation failed");
   }
@@ -47,27 +32,40 @@ export const handler = async (event: { Records?: SQSRecord[] }): Promise<void> =
   const records = event.Records ?? [];
   if (records.length === 0) return;
 
-  
+  const now = nowJamaicaMs();
   for (const record of records) {
     console.log(record);
-    
-    const { data } = parseMessage(record.body);
-    const id = crypto.randomUUID();
-    const scheduledEndAt = data.startTime + 10 * 60 * 1000;
-    const now = nowJamaicaMs();
-    await dynamo.send(
-      new PutItemCommand({
-        TableName: tableName,
-        Item: {
-          id: { S: id },
-          userId: { S: data.userID.trim() },
-          sessionId: { S: data.sessionID.trim() },
-          status: { S: Status.ACTIVE },
-          scheduledEndAt: { N: String(scheduledEndAt) },
-          voiceflowRequestSent: { BOOL: false },
-          createdAt: { N: String(now) },
-        },
-      })
+
+    const { userId, timestamp } = parseMessage(record.body);
+    const dt = DateTime.fromFormat(
+      timestamp,
+      "cccc, LLL dd, yyyy, HH:mm",
+      { zone: "America/Jamaica" }
     );
+    
+    const timestampMs = dt.toMillis();
+    const scheduledEndAt = timestampMs + 10 * 60 * 1000;
+    const id = crypto.randomUUID();
+
+    try {
+      await dynamo.send(
+        new PutItemCommand({
+          TableName: tableName,
+          ConditionExpression: "attribute_not_exists(userId)",
+          Item: {
+            id: { S: id },
+            userId: { S: userId.trim() },
+            status: { S: Status.ACTIVE },
+            scheduledEndAt: { N: String(scheduledEndAt) },
+            voiceflowRequestSent: { BOOL: false },
+            createdAt: { N: String(now) },
+          },
+        })
+      );
+    } catch (err) {
+      if (err instanceof ConditionalCheckFailedException) {
+        console.warn(`Skipping duplicate userId: ${userId}`);
+      }
+    }
   }
 };

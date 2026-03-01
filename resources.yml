@@ -46,14 +46,14 @@ Resources:
     Properties:
       TableName: ${self:service}-chat-sessions-${sls:stage}
       AttributeDefinitions:
-        - AttributeName: id
+        - AttributeName: userId
           AttributeType: S
         - AttributeName: status
           AttributeType: S
         - AttributeName: scheduledEndAt
           AttributeType: N
       KeySchema:
-        - AttributeName: id
+        - AttributeName: userId
           KeyType: HASH
       GlobalSecondaryIndexes:
         - IndexName: StatusScheduledEndAtIndex
