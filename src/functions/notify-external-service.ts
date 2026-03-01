@@ -17,7 +17,7 @@ export const handler = async (event: SQSEvent): Promise<SQSBatchResponse> => {
       // Send voiceflow API request to restart the use converation
       const result = await voiceFlowApi("DELETE", `/state/user/${encodeURIComponent(payload.userId)}`);
 
-      if (result.error) {
+      if (result != undefined && result.error) {
         throw new Error(`Voiceflow request failed for user "${payload.userId}": ${result.error.message}`);
       }
 

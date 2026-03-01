@@ -6,8 +6,8 @@ interface ApiError {
 }
 
 // Generic response structure
-export interface ApiResponse<T> {
-  data?: T;
+export interface ApiResponse {
+  data?: any;
   error?: ApiError;
 }
 export interface FetchConfig {
@@ -16,7 +16,7 @@ export interface FetchConfig {
   queryParams?: Record<string, string | number>;
 }
 
-export async function voiceFlowApi<T>(method: string, path: string): Promise<ApiResponse<T>> {
+export async function voiceFlowApi(method: string, path: string):Promise<void | {error:{message:string}}> {
 
   try {
     const response = await fetch(`${config.voiceflowBaseUrl}${path}`, {
@@ -29,17 +29,11 @@ export async function voiceFlowApi<T>(method: string, path: string): Promise<Api
 
     // Handle HTTP errors
     if (!response.ok) {
-      return {
-        error: {
-          message: `HTTP error: ${response.statusText}`,
-          status: response.status,
-        },
-      };
+      throw new Error(`voiceflow api DELETE request failed for ${path}`)
     }
 
-    const data = await response.json();
-    return { data };
   } catch (error) {
+    console.error("Error has occured while sending voiceflow api");
     return {
       error: {
         message: error instanceof Error ? error.message : 'Unknown error occurred',
