@@ -1,5 +1,9 @@
-import { DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { ConditionalCheckFailedException, DynamoDBClient, PutItemCommand } from "@aws-sdk/client-dynamodb";
+import { z } from "zod";
 import { config } from "../util/config";
+import { ChatEvent, chatEventBodySchema, nowJamaicaMs } from "../util/date";
+import { Status } from "../models/data";
+import { DateTime } from "luxon";
 
 const dynamo = new DynamoDBClient({});
 
@@ -7,51 +11,61 @@ interface SQSRecord {
   body?: string;
 }
 
-interface ChatEventMessage {
-  userId?: string;
-  sessionId?: string;
-  timestamp?: number;
+function parseMessage(raw: string | undefined): ChatEvent {
+  let parsed;
+  try {
+    parsed = raw ? JSON.parse(raw) : {};
+  } catch {
+    throw new Error(`Invalid message body: ${raw}`);
+  }
+
+  const result = chatEventBodySchema.safeParse(parsed);
+  if (!result.success) {
+    throw new Error(result.error.issues[0]?.message ?? "Message validation failed");
+  }
+
+  return result.data;
 }
 
 export const handler = async (event: { Records?: SQSRecord[] }): Promise<void> => {
   const tableName = config.chatSessionsTable;
-  if (!tableName) {
-    throw new Error("CHAT_SESSIONS_TABLE not configured");
-  }
-
   const records = event.Records ?? [];
-  const now = Date.now();
-  const scheduledEndAt = now + 10 * 60 * 1000; // 10 minutes from now
+  if (records.length === 0) return;
 
+  const now = nowJamaicaMs();
   for (const record of records) {
-    let message: ChatEventMessage;
-    try {
-      message = record.body ? JSON.parse(record.body) : {};
-    } catch {
-      throw new Error(`Invalid message body: ${record.body}`);
-    }
+    console.log(record);
 
-    const userId = typeof message.userId === "string" ? message.userId : "";
-    const sessionId = typeof message.sessionId === "string" ? message.sessionId : "";
-    if (!userId || !sessionId) {
-      throw new Error("Message must include userId and sessionId");
-    }
-
+    const { userId, timestamp } = parseMessage(record.body);
+    const dt = DateTime.fromFormat(
+      timestamp,
+      "cccc, LLL dd, yyyy, HH:mm",
+      { zone: "America/Jamaica" }
+    );
+    
+    const timestampMs = dt.toMillis();
+    const scheduledEndAt = timestampMs + 10 * 60 * 1000;
     const id = crypto.randomUUID();
 
-    await dynamo.send(
-      new PutItemCommand({
-        TableName: tableName,
-        Item: {
-          id: { S: id },
-          userId: { S: userId },
-          sessionId: { S: sessionId },
-          scheduledEndAt: { N: String(scheduledEndAt) },
-          endedAt: { NULL: true },
-          createdAt: { N: String(now) },
-          updatedAt: { N: String(now) },
-        },
-      })
-    );
+    try {
+      await dynamo.send(
+        new PutItemCommand({
+          TableName: tableName,
+          ConditionExpression: "attribute_not_exists(userId)",
+          Item: {
+            id: { S: id },
+            userId: { S: userId.trim() },
+            status: { S: Status.ACTIVE },
+            scheduledEndAt: { N: String(scheduledEndAt) },
+            voiceflowRequestSent: { BOOL: false },
+            createdAt: { N: String(now) },
+          },
+        })
+      );
+    } catch (err) {
+      if (err instanceof ConditionalCheckFailedException) {
+        console.warn(`Skipping duplicate userId: ${userId}`);
+      }
+    }
   }
 };

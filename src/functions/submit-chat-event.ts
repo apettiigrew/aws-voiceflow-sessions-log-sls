@@ -1,18 +1,11 @@
-import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { SQSClient, SendMessageCommand } from "@aws-sdk/client-sqs";
-import { z } from "zod";
+import type { APIGatewayProxyEvent, APIGatewayProxyResult } from "aws-lambda";
 import { config } from "../util/config";
+import { ChatEvent, chatEventBodySchema } from "../util/date";
 
 const sqs = new SQSClient({});
 
 /** Request body schema; validated in handler via safeParse(parsed). */
-const chatEventBodySchema = z.object({
-  userId: z.string().min(1, "userId is required and must be a non-empty string"),
-  sessionId: z.string().min(1, "sessionId is required and must be a non-empty string"),
-  timestamp: z.number({ message: "timestamp is required and must be a number (Unix milliseconds)" }),
-});
-
-export type ChatEventBody = z.infer<typeof chatEventBodySchema>;
 
 type OkResult<T> = { ok: true } & T;
 type ErrResult = { ok: false; response: APIGatewayProxyResult };
@@ -28,20 +21,10 @@ function parseBody(raw: string | null): unknown {
 }
 
 function ensureQueueUrl(): Result<{ queueUrl: string }> {
-  const queueUrl = config.chatEventsQueueUrl;
-  if (!queueUrl) {
-    return {
-      ok: false,
-      response: {
-        statusCode: 500,
-        body: JSON.stringify({ error: "CHAT_EVENTS_QUEUE_URL not configured" }),
-      },
-    };
-  }
-  return { ok: true, queueUrl };
+  return { ok: true, queueUrl: config.chatEventsQueueUrl };
 }
 
-function parseAndValidateBody(rawBody: string | null): Result<{ body: ChatEventBody }> {
+function parseAndValidateBody(rawBody: string | null): Result<{ body: ChatEvent }> {
   let parsed: unknown;
   try {
     parsed = parseBody(rawBody);
@@ -65,19 +48,15 @@ function parseAndValidateBody(rawBody: string | null): Result<{ body: ChatEventB
   return { ok: true, body: result.data };
 }
 
-async function enqueueChatEvent(
-  queueUrl: string,
-  body: ChatEventBody
-): Promise<APIGatewayProxyResult> {
-  const { userId, sessionId, timestamp } = body;
+async function enqueueChatEvent(queueUrl: string,body: ChatEvent): Promise<APIGatewayProxyResult> {
+  const { userId, timestamp } = body;
   try {
     const sendResult = await sqs.send(
       new SendMessageCommand({
         QueueUrl: queueUrl,
         MessageBody: JSON.stringify({
           userId: userId.trim(),
-          sessionId: sessionId.trim(),
-          timestamp,
+          timestamp: timestamp,
         }),
       })
     );

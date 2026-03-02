@@ -1,5 +1,6 @@
 # "service" is the name of this project. This will also be added to your AWS resource names.
 service: vf-endchat
+useDotenv: true
 
 provider:
   name: aws
@@ -7,16 +8,28 @@ provider:
   architecture: arm64
   stage: ${opt:stage, 'dev'}
   region: ${opt:region, 'us-east-1'}
-  package:
-    individually: true
   apiGateway:
     apiKeys:
       - name: ${self:service}-api-key-${sls:stage}
-        value: ${env:API_KEY}
+        value: ${env:AWS_HTTP_API_KEY}
     usagePlan:
       throttle:
         burstLimit: 200
         rateLimit: 100
+  logs:
+    restApi:
+      accessLogging: true
+      format: >-
+        {"requestId":"$context.requestId","extendedRequestId":"$context.extendedRequestId","ip":"$context.identity.sourceIp","caller":"$context.identity.caller","user":"$context.identity.user","requestTime":"$context.requestTime","httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath","status":"$context.status","protocol":"$context.protocol","responseLength":"$context.responseLength"}
+      executionLogging: true
+      level: INFO
+      fullExecutionData: false
+      roleManagedExternally: true
+  environment:
+    AWS_HTTP_API_KEY: ${env:AWS_HTTP_API_KEY}
+    VOICEFLOW_API_KEY: ${env:VOICEFLOW_API_KEY}
+    VOICEFLOW_BASEURL: ${env:VOICEFLOW_BASEURL}
+    VOICEFLOW_VERSIONID: ${env:VOICEFLOW_VERSIONID, 'development'}
   iam:
     role:
       statements:
@@ -24,10 +37,21 @@ provider:
           Action: sqs:SendMessage
           Resource: !GetAtt ChatEventsQueue.Arn
         - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt ExpiredSessionsQueue.Arn
+        - Effect: Allow
+          Action: sqs:SendMessage
+          Resource: !GetAtt NotifyQueue.Arn
+        - Effect: Allow
           Action:
             - dynamodb:PutItem
             - dynamodb:UpdateItem
           Resource: !GetAtt ChatSessionsTable.Arn
+        - Effect: Allow
+          Action: dynamodb:Query
+          Resource:
+            - !GetAtt ChatSessionsTable.Arn
+            - !Sub "${ChatSessionsTable.Arn}/index/StatusScheduledEndAtIndex"
 
 functions:
   submitChatEvent:
@@ -55,12 +79,51 @@ functions:
     environment:
       CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
 
+  determineSession:
+    name: ${self:service}-determine-session-${sls:stage}
+    description: Runs every 2 minutes; queries DynamoDB for expired sessions and sends them to ExpiredSessionsQueue.
+    handler: src/functions/determine-session.handler
+    reservedConcurrency: 1
+    events:
+      - schedule:
+          rate: rate(2 minutes)
+          enabled: true
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+      EXPIRED_SESSIONS_QUEUE_URL: !Ref ExpiredSessionsQueue
+
+  markSessionsInactive:
+    name: ${self:service}-mark-sessions-inactive-${sls:stage}
+    description: Consumes expired session records from SQS and marks them inactive in DynamoDB; forwards to NotifyQueue.
+    handler: src/functions/mark-sessions-inactive.handler
+    events:
+      - sqs:
+          arn: !GetAtt ExpiredSessionsQueue.Arn
+          batchSize: 10
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+      NOTIFY_QUEUE_URL: !Ref NotifyQueue
+
+  notifyExternalService:
+    name: ${self:service}-notify-external-service-${sls:stage}
+    description: Consumes from NotifyQueue and calls external notification API.
+    handler: src/functions/notify-external-service.handler
+    events:
+      - sqs:
+          arn: !GetAtt NotifyQueue.Arn
+          batchSize: 10
+          functionResponseType: ReportBatchItemFailures
+    environment:
+      CHAT_SESSIONS_TABLE: !Ref ChatSessionsTable
+      
 build:
   esbuild:
     bundle: true
     minify: true
     target: node20
     sourcemap: false
+package:
+  individually: true
 
 resources:
   Resources: ${file(resources.yml):Resources}
