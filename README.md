@@ -1,69 +1,157 @@
-<!--
-title: 'AWS Simple HTTP Endpoint example in NodeJS'
-description: 'This template demonstrates how to make a simple HTTP API with Node.js running on AWS Lambda and API Gateway using the Serverless Framework.'
-layout: Doc
-framework: v4
-platform: AWS
-language: nodeJS
-authorLink: 'https://github.com/serverless'
-authorName: 'Serverless, Inc.'
-authorAvatar: 'https://avatars1.githubusercontent.com/u/13742415?s=200&v=4'
--->
+# Voiceflow Auto End Chat - Serverless
 
-# Serverless Framework Node HTTP API on AWS
+A serverless AWS pipeline that automatically ends inactive Voiceflow chat sessions. It solves the problem of zombie sessions persisting in Voiceflow when users abandon a conversation without explicitly ending it. Built as an event-driven system using API Gateway, SQS, Lambda, and DynamoDB, ensuring sessions are cleaned up reliably and at scale without manual intervention.
 
-This template demonstrates how to make a simple HTTP API with Node.js running on AWS Lambda and API Gateway using the Serverless Framework.
+---
 
-This template does not include any kind of persistence (database). For more advanced examples, check out the [serverless/examples repository](https://github.com/serverless/examples/) which includes Typescript, Mongo, DynamoDB and other examples.
+## Screenshot
 
-## Usage
+At a high level, a request originates inside Voiceflow and is sent to our webhook via API Gateway, triggering a session activity event. From there, the system checks whether that session has expired based on an arbitrary 10-minute inactivity window. If it has, the Voiceflow API is called to programmatically end the session state.
 
-### Deployment
+**![highlevel.png](docs/highlevel.png)**
 
-In order to deploy the example, you need to run the following command:
 
+This is the first part of the workflow:
+
+- Voiceflow sends a POST request to API Gateway
+- API Gateway forwards the request to a Lambda function that transforms, checks, and validates the data
+- That Lambda enqueues the event onto an SQS queue, which acts as a buffering layer paired with a dead-letter queue to capture any problematic events
+- A worker Lambda consumes the SQS message and stores the event in DynamoDB
+
+**![systemdesign1.png](docs/systemdesign1.png)**
+
+
+This is the second part of the workflow:
+
+- An EventBridge scheduler triggers every 2 minutes to check whether any session has been inactive beyond the prescribed window (10 minutes by default)
+- A Lambda function queries the DynamoDB table for all expired session records
+- Those records are forwarded to another Lambda, which marks a field on each row as expired so the scheduler no longer picks them up
+- The expired sessions are then passed to a separate SQS queue, which feeds a downstream Lambda responsible for calling the Voiceflow API to end the session for that user
+
+The reason the Voiceflow API call and the DynamoDB update are handled by separate Lambdas is intentional. Calling an external API introduces failure modes — rate limits, regional quotas, network errors, third-party throttling — that are independent of our internal state update. By decoupling the two, we can continuously retry the Voiceflow API call without it affecting the database write that marks the session as inactive and expired.
+
+**![systemdesign2.png](docs/systemdesign2.png)**
+
+---
+
+## Core Functionality
+
+- Receives chat events via a private HTTP endpoint and enqueues them for processing
+- Tracks per-user session activity in DynamoDB with a scheduled end timestamp
+- Runs a scheduled job every 2 minutes to detect and flag expired sessions
+- Marks expired sessions inactive and forwards them to a notification queue
+- Calls the Voiceflow Dialog Management API to programmatically end the session
+
+---
+
+## Tech Stack
+
+| Layer        | Technology                              |
+| ------------ | --------------------------------------- |
+| Runtime      | Node.js 20.x (ARM64)                    |
+| Language     | TypeScript                              |
+| Framework    | Serverless Framework v4                 |
+| Cloud        | AWS (Lambda, API Gateway, SQS, DynamoDB)|
+| Build        | esbuild                                 |
+| Validation   | Zod                                     |
+| Date Handling| Luxon                                   |
+
+---
+
+## Deployment
+
+**Prerequisites:** AWS CLI configured, Serverless Framework v4 installed, `.env` populated (see [Environment Variables](#environment-variables)).
+
+```bash
+# Install dependencies
+npm install
+
+# Deploy to dev
+npm run deploy
+
+# Deploy to a specific stage/region
+serverless deploy --stage prod --region us-east-1
 ```
-serverless deploy
-```
 
-After running deploy, you should see output similar to:
+---
 
-```
-Deploying "serverless-http-api" to stage "dev" (us-east-1)
+## Endpoints
 
-✔ Service deployed to stack serverless-http-api-dev (91s)
+| Method | Path    | Auth        | Description                            |
+| ------ | ------- | ----------- | -------------------------------------- |
+| `POST` | `/chat` | API Key     | Submit a chat event for processing     |
 
-endpoint: GET - https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/
-functions:
-  hello: serverless-http-api-dev-hello (1.6 kB)
-```
-
-_Note_: In current form, after deployment, your API is public and can be invoked by anyone. For production deployments, you might want to configure an authorizer. For details on how to do that, refer to [HTTP API (API Gateway V2) event docs](https://www.serverless.com/framework/docs/providers/aws/events/http-api).
-
-### Invocation
-
-After successful deployment, you can call the created application via HTTP:
-
-```
-curl https://xxxxxxx.execute-api.us-east-1.amazonaws.com/
-```
-
-Which should result in response similar to:
+**Request body:**
 
 ```json
-{ "message": "Go Serverless v4! Your function executed successfully!" }
+{
+  "userId": "string",
+  "sessionId": "string"
+}
 ```
 
-### Local development
+The API key must be passed via the `x-api-key` header. This key matches the webhook secret configured in Voiceflow settings.
 
-The easiest way to develop and test your function is to use the `dev` command:
+---
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and fill in the values.
+
+| Variable               | Required | Description                                                         |
+| ---------------------- | -------- | ------------------------------------------------------------------- |
+| `AWS_HTTP_API_KEY`     | Yes      | API Gateway key (must match the webhook secret in Voiceflow)        |
+| `VOICEFLOW_API_KEY`    | Yes      | Voiceflow API key for the Dialog Management API                     |
+| `VOICEFLOW_BASEURL`    | Yes      | Voiceflow runtime base URL (default: `https://general-runtime.voiceflow.com`) |
+| `VOICEFLOW_VERSIONID`  | No       | Voiceflow environment to target (default: `development`)            |
+
+---
+
+## Project Structure
 
 ```
-serverless dev
+.
+├── src/
+│   ├── functions/
+│   │   ├── submit-chat-event.ts        # POST /chat handler, enqueues event to SQS
+│   │   ├── process-chat-event.ts       # SQS consumer, upserts session in DynamoDB
+│   │   ├── determine-session.ts        # Scheduled, queries & flags expired sessions
+│   │   ├── mark-sessions-inactive.ts   # SQS consumer, marks sessions inactive
+│   │   └── notify-external-service.ts  # SQS consumer, calls Voiceflow to end session
+│   ├── modules/
+│   │   └── voiceflow/
+│   │       └── voiceflow-service.ts    # Voiceflow Dialog Management API client
+│   ├── models/
+│   │   └── data.ts                     # Shared data models
+│   └── util/
+│       ├── config.ts                   # Environment variable config
+│       └── date.ts                     # Date/time utilities
+├── resources.yml                       # CloudFormation resource definitions
+├── serverless.yml                      # Serverless Framework config
+├── .env.example                        # Environment variable template
+└── package.json
 ```
 
-This will start a local emulator of AWS Lambda and tunnel your requests to and from AWS Lambda, allowing you to interact with your function as if it were running in the cloud.
+---
 
-Now you can invoke the function as before, but this time the function will be executed locally. Now you can develop your function locally, invoke it, and see the results immediately without having to re-deploy.
+## Contributing
 
-When you are done developing, don't forget to run `serverless deploy` to deploy the function to the cloud.
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/my-change`)
+3. Commit your changes (`git commit -m 'feat: add my change'`)
+4. Push and open a Pull Request
+
+Please keep changes focused and include a clear description of the problem being solved.
+
+---
+
+## License
+
+MIT - see [LICENSE](LICENSE) for details.
+
+---
+
+## Author
+
+**Andrew Pettigrew**
+[GitHub](https://github.com/andrewpettigrew)
